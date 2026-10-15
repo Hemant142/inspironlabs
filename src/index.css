@@ -1,0 +1,22 @@
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  min-height: 100%;
+}
+
+body {
+  background: #07060c;
+  color: #ece8f4;
+}
+
+button,
+a {
+  font-family: inherit;
+}
