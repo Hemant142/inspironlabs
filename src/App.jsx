@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react'
 import './App.css'
 
-const CHAT_IFRAME_URL = 'https://apex-precision-industries-ltd.insplora.ip.inspironlabs.com/embed/69cf0d91a2cad9d987e6c829d3f84463'
-const SEARCH_IFRAME_URL = 'http://localhost:3000/embed/c6f3561d5bd30e707c9617e4efc5d12f'
+const CHAT_IFRAME_URL = 'https://abcd.insplora.ip.inspironlabs.com/embed/c6f3561d5bd30e707c9617e4efc5d12f'
+const SEARCH_IFRAME_URL = 'https://abcd.insplora.ip.inspironlabs.com/embed/c6f3561d5bd30e707c9617e4efc5d12f'
 
 const SITE_NAV = [
   {
