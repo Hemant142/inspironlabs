@@ -1,63 +1,228 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useLayoutEffect, useRef, useCallback } from 'react'
 import './App.css'
 
 const CHAT_IFRAME_URL = 'https://abcd.insplora.ip.inspironlabs.com/embed/c6f3561d5bd30e707c9617e4efc5d12f'
 const SEARCH_IFRAME_URL = 'https://abcd.insplora.ip.inspironlabs.com/embed/c6f3561d5bd30e707c9617e4efc5d12f'
+const NAV_FIT_BUFFER = 24
 
 const SITE_NAV = [
   {
     label: 'Services',
-    min: 0,
     items: ['Product Engineering', 'AI & Machine Learning', 'Cloud & DevOps', 'Data Engineering & Analytics', 'UI/UX Design'],
   },
   {
     label: 'Industries',
-    min: 0,
     items: ['Banking & FinTech', 'Healthcare', 'Retail & E-commerce', 'Logistics', 'EdTech', 'Media & Entertainment'],
   },
   {
     label: 'AI Labs',
-    min: 0,
     items: ['GenAI strategy', 'Rapid prototyping', 'AI agents'],
   },
-  { label: 'Success Stories', min: 2 },
-  { label: 'About Us', min: 1 },
-  { label: 'Insights', min: 2 },
-  { label: 'Career', min: 1 },
+  { label: 'Success Stories' },
+  { label: 'About Us' },
+  { label: 'Insights' },
+  { label: 'Career' },
 ]
 
+function NavItems({ onNavigate, searchActive, onSearch, onContact }) {
+  return (
+    <>
+      {SITE_NAV.map((item) => (
+        <div className="site-nav-item" key={item.label}>
+          <a
+            className="site-nav-link"
+            href={`#${item.label.toLowerCase().replace(/\s+/g, '-')}`}
+            onClick={onNavigate}
+          >
+            <span>{item.label}</span>
+            {item.items && (
+              <svg width="12" height="8" viewBox="0 0 12 8" fill="none" aria-hidden="true">
+                <path d="M1 1.5l5 5 5-5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            )}
+          </a>
+          {item.items && (
+            <div className="site-dropdown">
+              {item.items.map((entry) => (
+                <a
+                  key={entry}
+                  href={`#${item.label.toLowerCase().replace(/\s+/g, '-')}`}
+                  onClick={onNavigate}
+                >
+                  {entry}
+                </a>
+              ))}
+            </div>
+          )}
+        </div>
+      ))}
+      <button
+        type="button"
+        className={`site-search${searchActive ? ' is-active' : ''}`}
+        aria-label={searchActive ? 'Search is open' : 'Open search'}
+        onClick={onSearch}
+      >
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <circle cx="11" cy="11" r="7" stroke="currentColor" strokeWidth="2" />
+          <path d="M20 20l-3.5-3.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+        </svg>
+        <span>Search</span>
+      </button>
+      <a className="site-contact" href="#begin" onClick={onContact}>
+        CONTACT
+      </a>
+    </>
+  )
+}
+
+function SiteHeader({ navId, menuOpen, onToggleMenu, onCloseMenu, onSearch, searchActive, onHome, onCompactChange }) {
+  const headerRef = useRef(null)
+  const logoRef = useRef(null)
+  const measureRef = useRef(null)
+  const [isCompact, setIsCompact] = useState(false)
+
+  const goHome = () => {
+    onCloseMenu()
+    onHome?.()
+  }
+
+  const updateFit = useCallback(() => {
+    const header = headerRef.current
+    const logo = logoRef.current
+    const measure = measureRef.current
+    if (!header || !logo || !measure) return
+
+    const styles = getComputedStyle(header)
+    const pad =
+      (parseFloat(styles.paddingLeft) || 0) + (parseFloat(styles.paddingRight) || 0)
+    const gap = parseFloat(styles.columnGap || styles.gap) || 0
+    const available = header.clientWidth
+    const naturalW = logo.naturalWidth || logo.getBoundingClientRect().width
+    const naturalH = logo.naturalHeight || 44
+    const logoW = Math.min((naturalW / naturalH) * 44, available * 0.42)
+    const needed = logoW + gap + measure.scrollWidth + pad + NAV_FIT_BUFFER
+
+    setIsCompact((prev) => {
+      // Hysteresis avoids flicker when logo/font widths differ across Windows DPI/zoom.
+      let nextCompact = available < 920 || (prev ? needed > available - 48 : needed > available)
+
+      if (!nextCompact) {
+        const liveNav = header.querySelector('.site-nav:not(.site-nav-measure)')
+        if (liveNav && getComputedStyle(liveNav).display !== 'none') {
+          const headerBox = header.getBoundingClientRect()
+          const navBox = liveNav.getBoundingClientRect()
+          const logoBox = logo.getBoundingClientRect()
+          if (
+            navBox.right > headerBox.right - 2 ||
+            logoBox.right > navBox.left - 8 ||
+            header.scrollWidth > header.clientWidth + 1
+          ) {
+            nextCompact = true
+          }
+        }
+      }
+
+      if (prev === nextCompact) return prev
+      if (!nextCompact) onCloseMenu()
+      onCompactChange?.(nextCompact)
+      return nextCompact
+    })
+  }, [onCloseMenu, onCompactChange])
+
+  useLayoutEffect(() => {
+    const header = headerRef.current
+    if (!header) return
+
+    updateFit()
+
+    const observer = new ResizeObserver(() => updateFit())
+    observer.observe(header)
+    if (logoRef.current) observer.observe(logoRef.current)
+    if (measureRef.current) observer.observe(measureRef.current)
+
+    const onResize = () => updateFit()
+    window.addEventListener('resize', onResize)
+
+    const fontsReady = document.fonts?.ready
+    if (fontsReady) fontsReady.then(updateFit).catch(() => {})
+
+    return () => {
+      observer.disconnect()
+      window.removeEventListener('resize', onResize)
+    }
+  }, [updateFit])
+
+  return (
+    <header
+      ref={headerRef}
+      className={`site-header${isCompact ? ' is-compact' : ''}${menuOpen ? ' is-menu-open' : ''}`}
+    >
+      <a className="site-logo-link" href="#top" aria-label="Inspiron Labs home" onClick={goHome}>
+        <img
+          ref={logoRef}
+          className="site-logo"
+          src="/inspiron-labs-logo.png"
+          alt="Inspiron Labs"
+          onLoad={updateFit}
+        />
+      </a>
+      <button
+        type="button"
+        className="site-menu-toggle"
+        aria-label={menuOpen ? 'Close menu' : 'Open menu'}
+        aria-expanded={menuOpen}
+        aria-controls={navId}
+        onClick={onToggleMenu}
+      >
+        <span className="site-menu-bar" />
+        <span className="site-menu-bar" />
+        <span className="site-menu-bar" />
+      </button>
+      <nav
+        ref={measureRef}
+        className="site-nav site-nav-measure"
+        aria-hidden="true"
+      >
+        <NavItems searchActive={false} onSearch={() => {}} onNavigate={() => {}} onContact={() => {}} />
+      </nav>
+      <nav id={navId} className={`site-nav${menuOpen ? ' is-open' : ''}`} aria-label="Primary">
+        <NavItems
+          searchActive={searchActive}
+          onSearch={onSearch}
+          onNavigate={onCloseMenu}
+          onContact={goHome}
+        />
+      </nav>
+    </header>
+  )
+}
+
 function App() {
-  const [width, setWidth] = useState(() => (typeof window === 'undefined' ? 1200 : window.innerWidth))
   const [isSearchOpen, setIsSearchOpen] = useState(false)
   const [isChatOpen, setIsChatOpen] = useState(false)
   const [isChatMaximized, setIsChatMaximized] = useState(false)
   const [hasPromptedBubble, setHasPromptedBubble] = useState(true)
-
-  useEffect(() => {
-    const onResize = () => setWidth(window.innerWidth)
-    window.addEventListener('resize', onResize)
-    return () => window.removeEventListener('resize', onResize)
-  }, [])
+  const [isMenuOpen, setIsMenuOpen] = useState(false)
 
   useEffect(() => {
     const handleKeyDown = (e) => {
       if (e.key !== 'Escape') return
       if (isSearchOpen) setIsSearchOpen(false)
+      else if (isMenuOpen) setIsMenuOpen(false)
       else if (isChatOpen) setIsChatOpen(false)
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [isSearchOpen, isChatOpen])
+  }, [isSearchOpen, isMenuOpen, isChatOpen])
 
   useEffect(() => {
-    document.body.style.overflow = isSearchOpen ? 'hidden' : ''
+    document.body.style.overflow = isSearchOpen || isMenuOpen ? 'hidden' : ''
     return () => {
       document.body.style.overflow = ''
     }
-  }, [isSearchOpen])
+  }, [isSearchOpen, isMenuOpen])
 
-  const navPriority = width >= 1150 ? 2 : width >= 820 ? 1 : width >= 640 ? 0 : -1
-  const visibleNav = SITE_NAV.filter((item) => item.min <= navPriority)
+  const closeMenu = () => setIsMenuOpen(false)
 
   const closeChat = () => setIsChatOpen(false)
 
@@ -72,49 +237,16 @@ function App() {
       <div className="glow glow-b" aria-hidden="true" />
       <div className="grain" aria-hidden="true" />
 
-      <header className="site-header">
-        <a href="#top" aria-label="Inspiron Labs home">
-          <img className="site-logo" src="/inspiron-labs-logo.png" alt="Inspiron Labs" />
-        </a>
-        <nav className="site-nav" aria-label="Primary">
-          {visibleNav.map((item) => (
-            <div className="site-nav-item" key={item.label}>
-              <a className="site-nav-link" href={`#${item.label.toLowerCase().replace(/\s+/g, '-')}`}>
-                <span>{item.label}</span>
-                {item.items && (
-                  <svg width="12" height="8" viewBox="0 0 12 8" fill="none" aria-hidden="true">
-                    <path d="M1 1.5l5 5 5-5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
-                )}
-              </a>
-              {item.items && (
-                <div className="site-dropdown">
-                  {item.items.map((entry) => (
-                    <a key={entry} href={`#${item.label.toLowerCase().replace(/\s+/g, '-')}`}>
-                      {entry}
-                    </a>
-                  ))}
-                </div>
-              )}
-            </div>
-          ))}
-          <button
-            type="button"
-            className="site-search"
-            aria-label="Open search"
-            onClick={() => setIsSearchOpen(true)}
-          >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-              <circle cx="11" cy="11" r="7" stroke="currentColor" strokeWidth="2" />
-              <path d="M20 20l-3.5-3.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-            </svg>
-            <span>Search</span>
-          </button>
-          <a className="site-contact" href="#begin">
-            CONTACT
-          </a>
-        </nav>
-      </header>
+      <SiteHeader
+        navId="site-navigation"
+        menuOpen={isMenuOpen}
+        onToggleMenu={() => setIsMenuOpen((open) => !open)}
+        onCloseMenu={closeMenu}
+        onSearch={() => {
+          closeMenu()
+          setIsSearchOpen(true)
+        }}
+      />
 
       <button
         type="button"
@@ -394,35 +526,15 @@ function App() {
 
       {isSearchOpen && (
         <div className="search-screen" role="dialog" aria-modal="true" aria-label="InspironLabs AI Search">
-          <header className="site-header">
-            <a href="#top" aria-label="Inspiron Labs home" onClick={() => setIsSearchOpen(false)}>
-              <img className="site-logo" src="/inspiron-labs-logo.png" alt="Inspiron Labs" />
-            </a>
-            <nav className="site-nav" aria-label="Primary">
-              {visibleNav.map((item) => (
-                <div className="site-nav-item" key={item.label}>
-                  <a className="site-nav-link" href={`#${item.label.toLowerCase().replace(/\s+/g, '-')}`}>
-                    <span>{item.label}</span>
-                    {item.items && (
-                      <svg width="12" height="8" viewBox="0 0 12 8" fill="none" aria-hidden="true">
-                        <path d="M1 1.5l5 5 5-5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                      </svg>
-                    )}
-                  </a>
-                </div>
-              ))}
-              <button type="button" className="site-search is-active" aria-label="Search is open">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                  <circle cx="11" cy="11" r="7" stroke="currentColor" strokeWidth="2" />
-                  <path d="M20 20l-3.5-3.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-                </svg>
-                <span>Search</span>
-              </button>
-              <a className="site-contact" href="#begin" onClick={() => setIsSearchOpen(false)}>
-                CONTACT
-              </a>
-            </nav>
-          </header>
+          <SiteHeader
+            navId="search-navigation"
+            menuOpen={isMenuOpen}
+            onToggleMenu={() => setIsMenuOpen((open) => !open)}
+            onCloseMenu={closeMenu}
+            onSearch={closeMenu}
+            searchActive
+            onHome={() => setIsSearchOpen(false)}
+          />
           <button
             type="button"
             className="site-close"
